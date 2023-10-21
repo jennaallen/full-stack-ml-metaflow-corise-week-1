@@ -30,7 +30,7 @@ def labeling_function(row):
         return 0
 
 
-class BaselineNLPFlow(FlowSpec):
+class GoodFirstModelNLPFlow(FlowSpec):
     # We can define input parameters to a Flow using Parameters
     # More info can be found here https://docs.metaflow.org/metaflow/basics#how-to-define-parameters-for-flows
     split_size = Parameter("split-sz", default=0.2)
@@ -70,19 +70,25 @@ class BaselineNLPFlow(FlowSpec):
         print(f"num of rows in train set: {self.traindf.shape[0]}")
         print(f"num of rows in validation set: {self.valdf.shape[0]}")
 
-        self.next(self.baseline)
+        self.next(self.log_reg_model)
 
     @step
-    def baseline(self):
-        "Compute the baseline"
+    def log_reg_model(self):
 
-        ### TODO: Fit and score a baseline model on the data, log the acc and rocauc as artifacts.
+        ### TODO: Fit and score a logistic regression model on the data, log the acc and rocauc as artifacts.
+        from sklearn.linear_model import LogisticRegression
         from sklearn.metrics import accuracy_score, roc_auc_score
+        from sklearn.feature_extraction.text import CountVectorizer
 
-        self.valdf["baseline_model_pred"] = 1
-        self.base_acc = accuracy_score(self.valdf["label"], self.valdf["baseline_model_pred"])
-        self.base_acc = accuracy_score(self.valdf['label'], self.valdf["baseline_model_pred"])
-        self.base_rocauc = roc_auc_score(self.valdf['label'], self.valdf["baseline_model_pred"])
+        # TF-IDF vectorization:
+        vectorizer = TfidfVectorizer(max_features=5000)
+        
+        model = LogisticRegression()
+        model.fit(vectorizer.fit_transform(self.traindf['review']), self.traindf['label'])
+        predictions = model.predict(vectorizer.transform(self.valdf['review']))
+        probability = model.predict_proba(vectorizer.transform(self.valdf['review']))[:, 1]
+        self.log_reg_acc = accuracy_score(self.valdf['label'], predictions)
+        self.log_reg_rocauc = roc_auc_score(self.valdf['label'], probability)
 
         self.next(self.end)
 
@@ -91,33 +97,32 @@ class BaselineNLPFlow(FlowSpec):
     )  # TODO: after you get the flow working, chain link on the left side nav to open your card!
     @step
     def end(self):
-        msg = "Baseline Accuracy: {}\nBaseline AUC: {}"
-        print(msg.format(round(self.base_acc, 3), round(self.base_rocauc, 3)))
+        msg = "Logistic Regression Accuracy: {}\nLogistic Regression AUC: {}"
+        print(msg.format(round(self.log_reg_acc, 3), round(self.log_reg_rocauc, 3)))
 
         current.card.append(Markdown("# Womens Clothing Review Results"))
         current.card.append(Markdown("## Overall Accuracy"))
-        current.card.append(Artifact(self.base_acc))
+        current.card.append(Artifact(self.log_reg_acc))
 
         current.card.append(Markdown("## Examples of False Positives"))
         # TODO: compute the false positive predictions where the baseline is 1 and the valdf label is 0.
-        false_positive_mask = (self.valdf["label"] == 0) & (self.valdf["baseline_model_pred"] == 1)
+        false_positive_mask = (self.valdf['label'] == 0) & (self.predictions == 1)
         false_positive_df = self.valdf[false_positive_mask]
         # TODO: display the false_positives dataframe using metaflow.cards
         # Documentation: https://docs.metaflow.org/api/cards#table
         current.card.append(
-            Table.from_dataframe(false_positive_df)
+            Table.from_dataframe(false_positive_df.head(10))
         )
 
         current.card.append(Markdown("## Examples of False Negatives"))
         # TODO: compute the false negative predictions where the baseline is 0 and the valdf label is 1.
-        false_negative_mask = (self.valdf["label"] == 1) & (self.valdf["baseline_model_pred"] == 0)
+        false_negative_mask = (self.valdf['label'] == 1) & (self.predictions == 0)
         false_negative_df = self.valdf[false_negative_mask]
         # TODO: display the false_negatives dataframe using metaflow.cards
-        # Since the baseline model isn't predicting any 0 values, there shouldn't be any false negatives
         current.card.append(
-            Table.from_dataframe(false_negative_df)
+            Table.from_dataframe(false_negative_df.head(10))
         )
 
 
 if __name__ == "__main__":
-    BaselineNLPFlow()
+    GoodFirstModelNLPFlow()
