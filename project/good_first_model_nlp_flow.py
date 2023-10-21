@@ -78,10 +78,10 @@ class GoodFirstModelNLPFlow(FlowSpec):
         ### TODO: Fit and score a logistic regression model on the data, log the acc and rocauc as artifacts.
         from sklearn.linear_model import LogisticRegression
         from sklearn.metrics import accuracy_score, roc_auc_score
-        from sklearn.feature_extraction.text import CountVectorizer
+        from sklearn.feature_extraction.text import TfidfVectorizer
 
         # TF-IDF vectorization:
-        vectorizer = TfidfVectorizer(max_features=5000)
+        vectorizer = TfidfVectorizer(stop_words='english', max_features=5000)
         
         model = LogisticRegression()
         model.fit(vectorizer.fit_transform(self.traindf['review']), self.traindf['label'])
@@ -89,6 +89,7 @@ class GoodFirstModelNLPFlow(FlowSpec):
         probability = model.predict_proba(vectorizer.transform(self.valdf['review']))[:, 1]
         self.log_reg_acc = accuracy_score(self.valdf['label'], predictions)
         self.log_reg_rocauc = roc_auc_score(self.valdf['label'], probability)
+        self.valdf["log_reg_model_pred"] = predictions
 
         self.next(self.end)
 
@@ -106,7 +107,7 @@ class GoodFirstModelNLPFlow(FlowSpec):
 
         current.card.append(Markdown("## Examples of False Positives"))
         # TODO: compute the false positive predictions where the baseline is 1 and the valdf label is 0.
-        false_positive_mask = (self.valdf['label'] == 0) & (self.predictions == 1)
+        false_positive_mask = (self.valdf['label'] == 0) & (self.valdf["log_reg_model_pred"] == 1)
         false_positive_df = self.valdf[false_positive_mask]
         # TODO: display the false_positives dataframe using metaflow.cards
         # Documentation: https://docs.metaflow.org/api/cards#table
@@ -116,7 +117,7 @@ class GoodFirstModelNLPFlow(FlowSpec):
 
         current.card.append(Markdown("## Examples of False Negatives"))
         # TODO: compute the false negative predictions where the baseline is 0 and the valdf label is 1.
-        false_negative_mask = (self.valdf['label'] == 1) & (self.predictions == 0)
+        false_negative_mask = (self.valdf['label'] == 1) & (self.valdf["log_reg_model_pred"] == 0)
         false_negative_df = self.valdf[false_negative_mask]
         # TODO: display the false_negatives dataframe using metaflow.cards
         current.card.append(
