@@ -6,7 +6,6 @@ from metaflow import (
     Parameter,
     IncludeFile,
     card,
-    current,
 )
 from metaflow.cards import Table, Markdown, Artifact
 
@@ -85,8 +84,6 @@ class BaselineNLPFlow(FlowSpec):
 
         # BoW vectorization:
         vectorizer = CountVectorizer()
-
-        X_train = vectorizer.fit_transform(self.traindf['review'])
         
         model = LogisticRegression()
         model.fit(vectorizer.fit_transform(self.traindf['review']), self.traindf['label'])
@@ -94,6 +91,7 @@ class BaselineNLPFlow(FlowSpec):
         probability = model.predict_proba(vectorizer.transform(self.valdf['review']))[:, 1]
         self.base_acc = accuracy_score(self.valdf['label'], predictions)
         self.base_rocauc = roc_auc_score(self.valdf['label'], probability)
+        self.predictions = predictions
 
         self.next(self.end)
 
@@ -111,12 +109,22 @@ class BaselineNLPFlow(FlowSpec):
 
         current.card.append(Markdown("## Examples of False Positives"))
         # TODO: compute the false positive predictions where the baseline is 1 and the valdf label is 0.
+        false_positive_mask = (self.valdf['label'] == 0) & (self.predictions == 1)
+        false_positive_df = self.valdf[false_positive_mask]
         # TODO: display the false_positives dataframe using metaflow.cards
         # Documentation: https://docs.metaflow.org/api/cards#table
+        current.card.append(
+            Table.from_dataframe(false_positive_df.head(10))
+        )
 
         current.card.append(Markdown("## Examples of False Negatives"))
-        # TODO: compute the false positive predictions where the baseline is 0 and the valdf label is 1.
+        # TODO: compute the false negative predictions where the baseline is 0 and the valdf label is 1.
+        false_negative_mask = (self.valdf['label'] == 1) & (self.predictions == 0)
+        false_negative_df = self.valdf[false_negative_mask]
         # TODO: display the false_negatives dataframe using metaflow.cards
+        current.card.append(
+            Table.from_dataframe(false_negative_df.head(10))
+        )
 
 
 if __name__ == "__main__":
