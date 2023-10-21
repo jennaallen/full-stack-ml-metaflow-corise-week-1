@@ -90,10 +90,10 @@ class BaselineNLPFlow(FlowSpec):
         
         model = LogisticRegression()
         model.fit(vectorizer.fit_transform(self.traindf['review']), self.traindf['label'])
-        predictions = model.predict(vectorizer.fit_transform(self.valdf['review']))
-        probability = model.predict_proba(vectorizer.fit_transform(self.valdf['review']))[:, 1]
+        predictions = model.predict(vectorizer.transform(self.valdf['review']))
+        probability = model.predict_proba(vectorizer.transform(self.valdf['review']))[:, 1]
         self.base_acc = accuracy_score(self.valdf['label'], predictions)
-        self.base_rocauc = roc_auc_score(self.valdf['label'], predictions)
+        self.base_rocauc = roc_auc_score(self.valdf['label'], probability)
 
         self.next(self.end)
 
